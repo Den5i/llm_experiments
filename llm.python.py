@@ -175,19 +175,19 @@ def custom_speaker_selection_func(
         3. None, which indicates the chat should be terminated.
     """
     priority_order = [
-        "manager_agent", 
-        "data_decision_agent", 
-        "aws_agent", 
-        "github_agent", 
-        "datadog_agent", 
-        "committer_agent", 
-        "verifier_agent", 
-        "submission_agent"
+        manager_agent, 
+        data_decision_agent, 
+        aws_agent, 
+        github_agent, 
+        datadog_agent, 
+        committer_agent, 
+        verifier_agent, 
+        submission_agent
     ]
     
-    if last_speaker.name in priority_order:
-        next_index = (priority_order.index(last_speaker.name) + 1) % len(priority_order)
-        return groupchat.agents[priority_order[next_index]]
+    if last_speaker in priority_order:
+        next_index = (priority_order.index(last_speaker) + 1) % len(priority_order)
+        return priority_order[next_index]
     return None
 
 groupchat = GroupChat(
@@ -213,15 +213,26 @@ def main():
         recipient=manager_agent,
         message="""
         Let's begin the data retrieval and processing workflow.
-        aws_agent gets data from aws with boto library, he runs code to do so, so you need to tell him which code to run,
-        github_agent gets terraform and terragrunt private repositories with github api, he runs code to do so, so you need to tell him which code to run,
-        manager_agent is manager oversees the process 
-        data_decision_agent decides what data to move onto (like query something on api)
-        datadog_agent queries datadog for aws metrics, he runs code to do so, so you need to tell him which code to run,
-        committer_agent is commiter adjusts the terraform code with suggestions 
-        verifier_agent verifies the code
-        submission_agent submits the code with github api to private repo,  he runs code to do so, so you need to tell him which code to run,
-        all of you are in the group chat speak in order. Address with code pieces destined to particular agent.
+        @aws_agent, please run the following code using boto library to get data from AWS:
+        ```
+        import boto3
+        s3 = boto3.client('s3')
+        response = s3.list_objects(Bucket='your-bucket-name')
+        print(response)
+        ```
+        This will retrieve a list of objects in your specified S3 bucket. Please confirm once you've completed this step.
+
+        @github_agent, please run the following code to get Terraform and Terragrunt private repositories using GitHub API:
+        ```
+        import requests
+        response = requests.get('https://api.github.com/repos/your-username/terraform-repo-name')
+        print(response.json())
+        response = requests.get('https://api.github.com/repos/your-username/terragrunt-repo-name')
+        print(response.json())
+        ```
+        This will fetch the details of your private Terraform and Terragrunt repositories. Confirm once you've completed this step.
+
+        Once these initial steps are complete, we can proceed with data processing and decision-making. Let me know if you need any further guidance or clarification.
     """
     )
 
