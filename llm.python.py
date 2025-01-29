@@ -203,10 +203,10 @@ manager = GroupChatManager(groupchat=groupchat, llm_config=llm_config)
 def main():
     logger.info("Starting the autogen app...")
     # Pass necessary credentials to agents
-    aws_agent.credentials = {"aws_access_key_id": "your_access_key", "aws_secret_access_key": "your_secret_key"}
-    github_agent.credentials = {"github_token": "your_github_token"}
-    datadog_agent.credentials = {"datadog_api_key": "your_datadog_api_key"}
-    submission_agent.credentials = {"github_token": "your_github_token"}
+    aws_agent.credentials = {"aws_access_key_id": "123", "aws_secret_access_key": "321"}
+    github_agent.credentials = {"github_token": "456"}
+    datadog_agent.credentials = {"datadog_api_key": "789"}
+    submission_agent.credentials = {"github_token": "1011"}
     
     # Initiate the group chat
     manager.initiate_chat(
@@ -222,6 +222,7 @@ def main():
         verifier_agent verifies the code
         submission_agent submits the code with github api to private repo,  he runs code to do so, so you need to tell him which code to run,
         all of you are in the group chat speak in order. Address with code pieces destined to particular agent.
+        Requests make in python. But the target code it terraform.
     """
     )
 
