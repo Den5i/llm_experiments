@@ -175,14 +175,14 @@ def custom_speaker_selection_func(
         3. None, which indicates the chat should be terminated.
     """
     priority_order = [
-        manager_agent, 
-        data_decision_agent, 
+        manager_agent,  
         aws_agent, 
         github_agent, 
         datadog_agent, 
         committer_agent, 
         verifier_agent, 
-        submission_agent
+        submission_agent,
+        data_decision_agent
     ]
     
     if last_speaker in priority_order:
@@ -215,14 +215,14 @@ def main():
         Let's begin the data retrieval and processing workflow.
         aws_agent gets data from aws with boto library, he runs code to do so, so you need to tell him which code to run,
         github_agent gets terraform and terragrunt private repositories with github api, he runs code to do so, so you need to tell him which code to run,
-        manager_agent is manager oversees the process 
-        data_decision_agent decides what data to move onto (like query something on api)
-        datadog_agent queries datadog for aws metrics, he runs code to do so, so you need to tell him which code to run,
-        committer_agent is commiter adjusts the terraform code with suggestions 
-        verifier_agent verifies the code
-        submission_agent submits the code with github api to private repo,  he runs code to do so, so you need to tell him which code to run,
-        all of you are in the group chat speak in order. Address with code pieces destined to particular agent.
-        Requests make in python. But the target code it terraform.
+        1) manager_agent is manager oversees the process 
+        2) datadog_agent queries datadog for aws metrics, he runs code to do so, so you need to tell him which code to run,
+        3) committer_agent is commiter adjusts the terraform code with suggestions 
+        4) verifier_agent verifies the code
+        5) submission_agent submits the code with github api to private repo,  he runs code to do so, so you need to tell him which code to run,
+        6) data_decision_agent decides what data to move onto 
+        All of you are in the group chat speak in order. Address with code pieces destined to particular agent if that agent destined to run code.
+        Requests make in python. But the target is to improve Terraform code from GitHub repository.
     """
     )
 
