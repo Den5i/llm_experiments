@@ -1,8 +1,8 @@
-# autogen_app.py
 import logging
 from autogen import ConversableAgent, GroupChat, GroupChatManager, Agent
-from autogen.coding import CodeExecutor, CodeBlock, CodeResult, MarkdownCodeExtractor
+from autogen.coding import CodeExecutor, CodeBlock, CodeResult, CodeExtractor, MarkdownCodeExtractor
 from typing import List, Union, Literal
+from IPython import get_ipython
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -25,133 +25,76 @@ llm_config = {
 class NotebookExecutor(CodeExecutor):
 
     @property
-    def code_extractor(self) -> MarkdownCodeExtractor:
+    def code_extractor(self) -> CodeExtractor:
         # Extract code from markdown blocks.
         return MarkdownCodeExtractor()
 
     def __init__(self) -> None:
-        # Do not assume IPython availability; initialize without it
-        self._ipython = None
+        # Get the current IPython instance running in this notebook.
+        self._ipython = get_ipython()
+        if self._ipython is None:
+            raise RuntimeError("No active IPython instance found. Please ensure this code is run in an IPython environment.")
 
     def execute_code_blocks(self, code_blocks: List[CodeBlock]) -> CodeResult:
         log = ""
         exit_code = 0  # Initialize exit code
         for code_block in code_blocks:
-            try:
-                # Execute the code block and capture the output
-                log += code_block.code + "\n"
-                # Execute the code block using exec() and capture the output
-                exec_globals = {}
-                exec(code_block.code, exec_globals)
-                log += f"Executed code block successfully.\n"
-            except Exception as e:
-                log += f"Error executing code block: {e}\n"
-                exit_code = 1  # Set exit code to 1 if an error occurs
-        return CodeResult(exit_code=exit_code, output=log)  
+            result = self._ipython.run_cell("%%capture --no-display cap\n" + code_block.code)
+            log += self._ipython.ev("cap.stdout")
+            log += self._ipython.ev("cap.stderr")
+            if result.result is not None:
+                log += str(result.result)
+            exit_code = 0 if result.success else 1
+            if result.error_before_exec is not None:
+                log += f"\n{result.error_before_exec}"
+                exit_code = 1
+            if result.error_in_exec is not None:
+                log += f"\n{result.error_in_exec}"
+                exit_code = 1
+            if exit_code != 0:
+                break
+        return CodeResult(exit_code=exit_code, output=log)
 
-# AWS Data Retrieval Agent using Code Executor
-aws_agent = ConversableAgent(
-    name="aws_agent",
-    system_message="""You are the AWS Data Retrieval Agent. Your task is to fetch data from AWS using Boto3.
-    Instructions:
-    - Begin your response with "AWS Agent says:".
-    - Use provided AWS credentials to access the required data.
-    - Share the retrieved data in the group chat.
-    - Ensure to execute any necessary code to retrieve data, do not invent results.
-    """,
-    llm_config=llm_config,
-    human_input_mode="NEVER",
-    code_execution_config={"executor": NotebookExecutor()}
-)
-
-# GitHub Repository Retrieval Agent using Code Executor
-github_agent = ConversableAgent(
-    name="github_agent",
-    system_message="""You are the GitHub Repository Retrieval Agent. Your task is to fetch Terraform and Terragrunt repositories using the GitHub API.
-    Instructions:
-    - Begin your response with "GitHub Agent says:".
-    - Use provided GitHub credentials to access the repositories.
-    - Share the retrieved repository data in the group chat.
-    - Ensure to execute any necessary code to retrieve data, do not invent results.
-    """,
-    llm_config=llm_config,
-    human_input_mode="NEVER",
-    code_execution_config={"executor": NotebookExecutor()}
-)
-
-# Manager Agent
+# Generic Manager Agent
 manager_agent = ConversableAgent(
     name="manager_agent",
-    system_message="""You are the Manager Agent. Your task is to oversee the process and ensure all agents are performing their tasks correctly.
+    system_message="""You are the Manager Agent. Your task is to identify tasks and set code requirements.
     Instructions:
     - Begin your response with "Manager Agent says:".
-    - Monitor the progress of other agents and provide guidance as needed.
+    - Identify the task and delegate it to the Coder or Runner as needed.
+    - If you need user input, use the code word "TERMINATE" to pause the chat and ask for input.
     """,
     llm_config=llm_config,
-    human_input_mode="NEVER",
+    is_termination_msg=lambda msg: "TERMINATE" in msg["content"],  # Added termination message check
+    human_input_mode="TERMINATE",  # Request human input when termination conditions are met
 )
 
-# Data Decision Agent
-data_decision_agent = ConversableAgent(
-    name="data_decision_agent",
-    system_message="""You are the Data Decision Agent. Your task is to decide what data to move on to the next step.
-    Instructions:
-    - Begin your response with "Data Decision Agent says:".
-    - Analyze the data provided by other agents and decide what to query next.
+# Generic Coder Agent
+coder_agent = ConversableAgent(
+    name="coder_agent",
+    system_message="""You are a helpful AI assistant.\n"
+    "You use your coding skill to solve problems.\n"
+    "You have access to a IPython kernel to execute Python code.\n"
+    "You can suggest Python code in Markdown blocks, each block is a cell.\n"
+    "The code blocks will be executed in the IPython kernel in the order you suggest them.\n"
+    "All necessary libraries have already been installed.\n"
     """,
     llm_config=llm_config,
-    human_input_mode="NEVER",
+    is_termination_msg=lambda msg: "TERMINATE" in msg["content"],  # Added termination message check
+    human_input_mode="TERMINATE",  # Request human input when termination conditions are met
 )
 
-# Datadog Query Agent using Code Executor
-datadog_agent = ConversableAgent(
-    name="datadog_agent",
-    system_message="""You are the Datadog Query Agent. Your task is to query Datadog for relevant metrics.
+# Generic Runner Agent
+runner_agent = ConversableAgent(
+    name="runner_agent",
+    system_message="""You are the Runner Agent. Your task is to execute the Python code provided by the Coder.
     Instructions:
-    - Begin your response with "Datadog Agent says:".
-    - Use provided Datadog credentials to perform the queries.
-    - Ensure to execute any necessary code to retrieve data, do not invent results.
+    - Begin your response with "Runner Agent says:".
+    - Execute the provided code and return the results.
     """,
     llm_config=llm_config,
-    human_input_mode="NEVER",
-    code_execution_config={"executor": NotebookExecutor()}
-)
-
-# Code Committer Agent
-committer_agent = ConversableAgent(
-    name="committer_agent",
-    system_message="""You are the Committer Agent. Your task is to adjust the code based on the decisions made and prepare it for submission.
-    Instructions:
-    - Begin your response with "Committer Agent says:".
-    - Make necessary code adjustments and prepare for submission.
-    """,
-    llm_config=llm_config,
-    human_input_mode="NEVER",
-)
-
-# Code Verifier Agent
-verifier_agent = ConversableAgent(
-    name="verifier_agent",
-    system_message="""You are the Verifier Agent. Your task is to verify the code before submission.
-    Instructions:
-    - Begin your response with "Verifier Agent says:".
-    - Ensure the code meets all quality standards before submission.
-    """,
-    llm_config=llm_config,
-    human_input_mode="NEVER",
-)
-
-# GitHub Submission Agent using Code Executor
-submission_agent = ConversableAgent(
-    name="submission_agent",
-    system_message="""You are the Submission Agent. Your task is to submit the code using the GitHub API.
-    Instructions:
-    - Begin your response with "Submission Agent says:".
-    - Use provided GitHub credentials to submit the code.
-    - Ensure to execute any necessary code to submit data, do not invent results.
-    """,
-    llm_config=llm_config,
-    human_input_mode="NEVER",
+    is_termination_msg=lambda msg: "TERMINATE" in msg["content"],  # Added termination message check
+    human_input_mode="TERMINATE",  # Request human input when termination conditions are met
     code_execution_config={"executor": NotebookExecutor()}
 )
 
@@ -176,13 +119,8 @@ def custom_speaker_selection_func(
     """
     priority_order = [
         manager_agent,  
-        aws_agent, 
-        github_agent, 
-        datadog_agent, 
-        committer_agent, 
-        verifier_agent, 
-        submission_agent,
-        data_decision_agent
+        coder_agent, 
+        runner_agent
     ]
     
     if last_speaker in priority_order:
@@ -191,10 +129,10 @@ def custom_speaker_selection_func(
     return None
 
 groupchat = GroupChat(
-    agents=[aws_agent, github_agent, manager_agent, data_decision_agent, datadog_agent, committer_agent, verifier_agent, submission_agent],
+    agents=[manager_agent, coder_agent, runner_agent],  # Removed user agent from the group chat
     messages=[],
     max_round=50,
-    speaker_selection_method=custom_speaker_selection_func,
+    speaker_selection_method=custom_speaker_selection_func
 )
 
 # Manager to handle the group chat
@@ -202,27 +140,14 @@ manager = GroupChatManager(groupchat=groupchat, llm_config=llm_config)
 
 def main():
     logger.info("Starting the autogen app...")
-    # Pass necessary credentials to agents
-    aws_agent.credentials = {"aws_access_key_id": "123", "aws_secret_access_key": "321"}
-    github_agent.credentials = {"github_token": "456"}
-    datadog_agent.credentials = {"datadog_api_key": "789"}
-    submission_agent.credentials = {"github_token": "1011"}
     
     # Initiate the group chat
     manager.initiate_chat(
-        recipient=manager_agent,
+        recipient=manager_agent,  # Start the chat with the manager agent
         message="""
-        Let's begin the data retrieval and processing workflow.
-        aws_agent gets data from aws with boto library, he runs code to do so, so you need to tell him which code to run,
-        github_agent gets terraform and terragrunt private repositories with github api, he runs code to do so, so you need to tell him which code to run,
-        1) manager_agent is manager oversees the process 
-        2) datadog_agent queries datadog for aws metrics, he runs code to do so, so you need to tell him which code to run,
-        3) committer_agent is commiter adjusts the terraform code with suggestions 
-        4) verifier_agent verifies the code
-        5) submission_agent submits the code with github api to private repo,  he runs code to do so, so you need to tell him which code to run,
-        6) data_decision_agent decides what data to move onto 
-        All of you are in the group chat speak in order. Address with code pieces destined to particular agent if that agent destined to run code.
-        Requests make in python. But the target is to improve Terraform code from GitHub repository.
+        Let's begin the workflow. The Manager will identify tasks, the Coder will write the necessary iPython code, and the Runner will execute that code.
+        If at any point you need to ask the user for input, use the code word "TERMINATE" all caps to pause the chat.
+        Manager, accept the overall description and terminate the chat with your first message asking user for the task.
     """
     )
 
