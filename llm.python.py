@@ -1,3 +1,4 @@
+# ipython llm.python.py
 import logging
 from autogen import ConversableAgent, GroupChat, GroupChatManager, Agent
 from autogen.coding import CodeExecutor, CodeBlock, CodeResult, CodeExtractor, MarkdownCodeExtractor
@@ -77,7 +78,7 @@ coder_agent = ConversableAgent(
     "You have access to a IPython kernel to execute Python code.\n"
     "You can suggest Python code in Markdown blocks, each block is a cell.\n"
     "The code blocks will be executed in the IPython kernel in the order you suggest them.\n"
-    "All necessary libraries have already been installed.\n"
+    "All necessary libraries have already been installed. Provide runner agent with code.\n"
     """,
     llm_config=llm_config,
     is_termination_msg=lambda msg: "TERMINATE" in msg["content"],  # Added termination message check
